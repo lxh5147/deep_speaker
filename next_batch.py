@@ -51,6 +51,19 @@ def pre_process_inputs(signal=np.random.uniform(size=32000), target_sample_rate=
     return np.array(network_inputs)
 
 
+# TODO: remove this hot fix when the model supports dynamic number of frame slices
+def pad_with_copy_if_needed(x,min_global_frames):
+    x_padded = [x]
+    x_len = len(x)
+    x_padded_len = x_len
+    while x_padded_len < min_global_frames:
+        x_padded.append(x)
+        x_padded_len += x_len
+    if len(x_padded) == 1:
+        return x
+    else:
+        return np.concatenate(x_padded)
+
 class MiniBatch:
     def __init__(self, libri, batch_size):
         # indices = np.random.choice(len(libri), size=batch_size, replace=False)
@@ -101,8 +114,12 @@ class MiniBatch:
     def load_wav(self):
         # load a batch of wave files
         self.libri_batch['raw_audio'] = self.libri_batch['filename'].apply(lambda x: read_audio(x))
+        min_global_frames = c.TRUNCATE_SOUND_FIRST_SECONDS * c.SAMPLE_RATE
+        # TODO: remove this hot fix when the model supports dynmaic number of frame slices
+        self.libri_batch['raw_audio'] = self.libri_batch['raw_audio'].apply(lambda x: pad_with_copy_if_needed(x,min_global_frames))
+
         min_existing_frames = min(self.libri_batch['raw_audio'].apply(lambda x: len(x)).values)
-        max_frames = min(c.TRUNCATE_SOUND_FIRST_SECONDS * c.SAMPLE_RATE, min_existing_frames)
+        max_frames = min(min_global_frames, min_existing_frames)
         self.libri_batch['raw_audio'] = self.libri_batch['raw_audio'].apply(lambda x: x[0:max_frames])
         self.audio_loaded = True
 
